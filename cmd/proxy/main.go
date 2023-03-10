@@ -5,31 +5,47 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"sync"
 )
 
 func main() {
-	log.Fatal(proxy(1234, []string{"127.0.0.1:12340", "127.0.0.1:12350"}))
+	log.Fatal(proxy([]int{1234, 1235, 1236}, []string{"127.0.0.1:12340", "127.0.0.1:12350"}))
 }
 
-func proxy(port int, targets []string) error {
-	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return err
-	}
-
-	r := &RoundRobin{
-		targets: targets,
-	}
-
-	for {
-		src, err := l.Accept()
+func proxy(ports []int, targets []string) error {
+	var ll []net.Listener
+	for _, port := range ports {
+		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
-			continue
+			return err
 		}
 
-		go handleConn(src, r.CurrentTarget())
+		ll = append(ll, l)
 	}
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+
+	for _, l := range ll {
+		go func(lis net.Listener) {
+			r := &RoundRobin{
+				targets: targets,
+			}
+
+			src, err := lis.Accept()
+			if err != nil {
+				panic(err)
+			}
+
+			go handleConn(src, r.CurrentTarget())
+		}(l)
+	}
+
+	<-sig
+
+	return nil
 }
 
 func handleConn(src net.Conn, addr string) {
