@@ -15,20 +15,20 @@ func main() {
 }
 
 func proxy(ports []int, targets []string) error {
-	var ll []net.Listener
+	var tcpListeners []net.Listener
 	for _, port := range ports {
-		l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		tcpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
 			return err
 		}
 
-		ll = append(ll, l)
+		tcpListeners = append(tcpListeners, tcpListener)
 	}
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 
-	for _, l := range ll {
+	for _, l := range tcpListeners {
 		go func(lis net.Listener) {
 			r := &RoundRobin{
 				targets: targets,
